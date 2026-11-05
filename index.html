@@ -61,7 +61,7 @@
 
         h1 { color: #00cbd4; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 10px; }
         .header-bar { width: 100%; max-width: 1200px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .user-tag { color: #aaa; font-size: 14px; }
+        .user-tag { color: #aaa; font-size: 14px; margin-bottom: 5px; }
         .btn-logout { background: #ff4444; border: none; color: white; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
 
         /* --- ÁREA DE CRIAÇÃO --- */
@@ -96,7 +96,7 @@
         .file-upload:hover { border-color: #00cbd4; color: white; }
         #fileInputCreate, #fileInputEdit { display: none; }
 
-        /* NOVOS BOTÕES DE SALVAR */
+        /* BOTÕES DE SALVAR */
         .save-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 10px; }
         @media (max-width: 600px) { .save-actions { grid-template-columns: 1fr; } }
 
@@ -171,9 +171,9 @@
         }
         .card-img { width: 180px; height: 100%; object-fit: cover; cursor: pointer; border-right: 1px solid #333; transition: 0.3s; }
         .card-img:hover { opacity: 0.8; }
-        .card-info { padding: 15px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
-        .card-title { font-size: 18px; font-weight: bold; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .card-cmd { background: #111; color: #ccc; padding: 5px; border-radius: 4px; font-family: monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+        .card-info { padding: 15px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; }
+        .card-title { font-size: 18px; font-weight: bold; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 110px; }
+        .card-cmd { background: #111; color: #ccc; padding: 5px; border-radius: 4px; font-family: monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; margin-top: 8px;}
         .card-actions { position: absolute; top: 15px; right: 15px; display: flex; gap: 5px; }
 
         /* CARD COMPACTO (GERAL - SEM FOTO GRANDE) */
@@ -190,7 +190,6 @@
         }
         .btn-view-photo:hover { background: #333; color: white; border-color: white; }
         .compact-actions { display: flex; gap: 5px; justify-content: flex-end; margin-top: 10px; }
-
 
         .btn-icon { 
             width: 32px; height: 32px; border-radius: 5px;
@@ -235,7 +234,7 @@
 
     <div id="loginScreen">
         <div class="login-box">
-            <h1 style="font-size: 24px;">Organizador de BINDS - ImersiON</h1>
+            <h1 style="font-size: 24px;">Organizador de BINDS - UM GAROTO</h1>
             <p style="color:#aaa; margin-bottom: 20px;">Login ou Cadastro</p>
             <input type="email" id="email" class="login-input" placeholder="E-mail">
             <input type="password" id="password" class="login-input" placeholder="Senha">
@@ -368,9 +367,10 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        const ADMIN_EMAIL = "kraznelofc@gmail.com";
+        // E-mail dono das binds antigas (legado)
+        const OWNER_EMAIL = "kraznelofc@gmail.com";
         let currentUser = null;
-        let isUserAdmin = false;
+        let unsubscribeSnapshot = null;
 
         // --- AUTH ---
         onAuthStateChanged(auth, (user) => {
@@ -380,7 +380,6 @@
 
             if (user) {
                 currentUser = user;
-                isUserAdmin = (user.email === ADMIN_EMAIL);
                 loginScreen.style.display = 'none';
                 appContent.style.display = 'flex';
                 document.getElementById('userEmailDisplay').innerText = user.email;
@@ -388,7 +387,10 @@
                 carregarBindsDoBanco();
             } else {
                 currentUser = null;
-                isUserAdmin = false;
+                if (unsubscribeSnapshot) {
+                    unsubscribeSnapshot();
+                    unsubscribeSnapshot = null;
+                }
                 loginScreen.style.display = 'flex';
                 appContent.style.display = 'none';
             }
@@ -396,7 +398,7 @@
 
         // --- LOGIN/CADASTRO ---
         window.criarConta = async () => {
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const pass = document.getElementById('password').value;
             const msg = document.getElementById('loginMsg');
             if(!email || !pass) return msg.innerText = "Preencha e-mail e senha.";
@@ -404,30 +406,37 @@
             try {
                 msg.innerText = "Criando...";
                 await createUserWithEmailAndPassword(auth, email, pass);
-                alert("Criado com sucesso!");
+                msg.innerText = "";
+                alert("Conta criada com sucesso!");
             } catch (error) {
                 msg.innerText = "Erro: " + error.message;
             }
         };
 
         window.fazerLogin = async () => {
-            const email = document.getElementById('email').value;
+            const email = document.getElementById('email').value.trim();
             const pass = document.getElementById('password').value;
             const msg = document.getElementById('loginMsg');
             try {
                 msg.innerText = "Verificando...";
                 await signInWithEmailAndPassword(auth, email, pass);
+                msg.innerText = "";
             } catch (error) {
                 msg.innerText = "Erro: " + error.message;
             }
         };
 
         window.sair = () => signOut(auth);
+        
         window.redefinirSenha = async () => {
-            const email = document.getElementById('email').value;
-            if(!email) return alert("Digite o email primeiro.");
-            try { await sendPasswordResetEmail(auth, email); alert("Email enviado!"); } 
-            catch (e) { alert("Erro: " + e.message); }
+            const email = document.getElementById('email').value.trim();
+            if(!email) return alert("Digite seu e-mail no campo acima primeiro.");
+            try { 
+                await sendPasswordResetEmail(auth, email); 
+                alert("E-mail de redefinição enviado!"); 
+            } catch (e) { 
+                alert("Erro: " + e.message); 
+            }
         };
 
         // --- APP LOGIC ---
@@ -439,6 +448,7 @@
             document.getElementById('fileNameCreate').innerText = e.target.files[0].name;
             document.getElementById('dropAreaCreate').style.borderColor = "#00cbd4";
         }));
+        
         document.getElementById('fileInputEdit').addEventListener('change', (e) => processarImg(e, (b64) => {
             tempImgEdit = b64;
             document.getElementById('fileNameEdit').innerText = "Nova foto: " + e.target.files[0].name;
@@ -452,10 +462,12 @@
             reader.readAsDataURL(file);
         }
 
-        // --- SALVAR BIND ---
+        // --- SALVAR BIND (AGORA VINCULADO AO USUÁRIO LOGADO) ---
         window.criarBind = async (tipoCategoria) => {
-            const nome = document.getElementById('createNome').value;
-            const comando = document.getElementById('createComando').value;
+            if (!currentUser) return alert("Você precisa estar logado!");
+
+            const nome = document.getElementById('createNome').value.trim();
+            const comando = document.getElementById('createComando').value.trim();
             if(!nome || !comando) return alert("Preencha nome e comando!");
 
             try {
@@ -464,7 +476,9 @@
                     comando: comando,
                     foto: tempImgCreate,
                     categoria: tipoCategoria,
-                    dataCriacao: Date.now()
+                    dataCriacao: Date.now(),
+                    uid: currentUser.uid,               // ID exclusivo do usuário
+                    userEmail: currentUser.email.toLowerCase() // E-mail do usuário
                 });
                 limparCamposCriacao();
                 alert("Salvo em: " + tipoCategoria.toUpperCase());
@@ -482,11 +496,13 @@
             tempImgCreate = "https://via.placeholder.com/300x200/222/555?text=Sem+Foto";
         }
 
-        // --- LER E DISTRIBUIR ---
+        // --- LER E DISTRIBUIR (FILTRADO POR USUÁRIO) ---
         function carregarBindsDoBanco() {
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+
             const q = query(collection(db, "binds"), orderBy("dataCriacao", "desc"));
             
-            onSnapshot(q, (snapshot) => {
+            unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
                 const listaGeral = document.getElementById('listaGeral');
                 const listaMasc = document.getElementById('listaMasc');
                 const listaFem = document.getElementById('listaFem');
@@ -495,30 +511,51 @@
                 listaMasc.innerHTML = "";
                 listaFem.innerHTML = "";
 
-                if(snapshot.empty) {
-                    listaGeral.innerHTML = "<p style='color:#666;'>Nada ainda.</p>";
-                    return;
-                }
+                if (!currentUser) return;
+
+                const emailLogado = currentUser.email.toLowerCase();
+                const uidLogado = currentUser.uid;
+                const isOwnerAccount = (emailLogado === OWNER_EMAIL.toLowerCase());
+
+                let countGeral = 0;
+                let countMasc = 0;
+                let countFem = 0;
 
                 snapshot.forEach((docSnap) => {
                     const bind = docSnap.data();
                     const id = docSnap.id;
+
+                    // Verifica se a bind pertence ao usuário logado:
+                    // 1. Tem o mesmo UID ou userEmail do usuário atual
+                    // 2. OU é uma bind antiga (sem uid e sem userEmail) e o usuário atual é kraznelofc@gmail.com
+                    const isLegacyBind = (!bind.uid && !bind.userEmail);
+                    const belongsToCurrentUser = 
+                        (bind.uid === uidLogado) || 
+                        (bind.userEmail && bind.userEmail.toLowerCase() === emailLogado) || 
+                        (isOwnerAccount && isLegacyBind);
+
+                    // Se não pertencer a este usuário, pula para a próxima
+                    if (!belongsToCurrentUser) return;
+
                     const categoria = bind.categoria || 'geral'; 
 
-                    let botoesAdmin = '';
-                    if(isUserAdmin) {
-                        botoesAdmin = `
-                            <button class="btn-icon btn-edit" onclick="abrirEditor('${id}', '${bind.nome.replace(/'/g, "\\'")}', '${bind.comando.replace(/'/g, "\\'")}', '${categoria}')" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="btn-icon btn-del" onclick="deletar('${id}')" title="Excluir"><i class="fas fa-trash"></i></button>
-                        `;
-                    }
+                    // Escapar aspas simples para evitar quebra nos botões HTML
+                    const nomeSafe = (bind.nome || '').replace(/'/g, "\\'");
+                    const cmdSafe = (bind.comando || '').replace(/'/g, "\\'");
+
+                    // Botões de editar e excluir liberados para o dono da própria bind
+                    const botoesAcaoUsuario = `
+                        <button class="btn-icon btn-edit" onclick="abrirEditor('${id}', '${nomeSafe}', '${cmdSafe}', '${categoria}')" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                        <button class="btn-icon btn-del" onclick="deletar('${id}')" title="Excluir"><i class="fas fa-trash"></i></button>
+                    `;
 
                     // --- CARD PARA GERAL (COMPACTO) ---
                     if (categoria === 'geral') {
+                        countGeral++;
                         const html = `
                             <div class="bind-card-compact">
                                 <div>
-                                    <div class="card-title" style="font-size:16px;">${bind.nome}</div>
+                                    <div class="card-title" style="font-size:16px; padding-right:0;">${bind.nome}</div>
                                     <div class="card-cmd" style="color:#ccc; margin-top:5px;">${bind.comando}</div>
                                 </div>
 
@@ -527,9 +564,9 @@
                                         <i class="fas fa-image"></i> Ver Foto
                                     </button>
                                     <div class="compact-actions">
-                                        <button class="btn-icon btn-copy" onclick="copiarTexto('${bind.comando.replace(/'/g, "\\'")}')"><i class="fas fa-copy"></i></button>
-                                        <button class="btn-icon btn-bind" onclick="gerarBindComTecla('${bind.nome.replace(/'/g, "\\'")}', '${bind.comando.replace(/'/g, "\\'")}')"><i class="fas fa-keyboard"></i></button>
-                                        ${botoesAdmin}
+                                        <button class="btn-icon btn-copy" onclick="copiarTexto('${cmdSafe}')" title="Copiar Comando"><i class="fas fa-copy"></i></button>
+                                        <button class="btn-icon btn-bind" onclick="gerarBindComTecla('${nomeSafe}', '${cmdSafe}')" title="Gerar Bind F8"><i class="fas fa-keyboard"></i></button>
+                                        ${botoesAcaoUsuario}
                                     </div>
                                 </div>
                             </div>
@@ -539,8 +576,8 @@
                     } else {
                         // --- CARD PARA ROUPAS (COM FOTO) ---
                         let corTextoCmd = '#ccc';
-                        if(categoria === 'masculino') corTextoCmd = '#00cbd4';
-                        if(categoria === 'feminino') corTextoCmd = '#ff66c4';
+                        if(categoria === 'masculino') { corTextoCmd = '#00cbd4'; countMasc++; }
+                        if(categoria === 'feminino') { corTextoCmd = '#ff66c4'; countFem++; }
 
                         const html = `
                             <div class="bind-card">
@@ -551,9 +588,9 @@
                                         <div class="card-cmd" style="color:${corTextoCmd}">${bind.comando}</div>
                                     </div>
                                     <div class="card-actions">
-                                        <button class="btn-icon btn-copy" onclick="copiarTexto('${bind.comando.replace(/'/g, "\\'")}')"><i class="fas fa-copy"></i></button>
-                                        <button class="btn-icon btn-bind" onclick="gerarBindComTecla('${bind.nome.replace(/'/g, "\\'")}', '${bind.comando.replace(/'/g, "\\'")}')"><i class="fas fa-keyboard"></i></button>
-                                        ${botoesAdmin}
+                                        <button class="btn-icon btn-copy" onclick="copiarTexto('${cmdSafe}')" title="Copiar Comando"><i class="fas fa-copy"></i></button>
+                                        <button class="btn-icon btn-bind" onclick="gerarBindComTecla('${nomeSafe}', '${cmdSafe}')" title="Gerar Bind F8"><i class="fas fa-keyboard"></i></button>
+                                        ${botoesAcaoUsuario}
                                     </div>
                                 </div>
                             </div>
@@ -566,12 +603,28 @@
                         }
                     }
                 });
+
+                if (countGeral === 0) {
+                    listaGeral.innerHTML = "<p style='color:#666;'>Nenhuma bind geral cadastrada.</p>";
+                }
+                if (countMasc === 0) {
+                    listaMasc.innerHTML = "<p style='color:#555; text-align:center; font-size:14px;'>Nenhuma roupa masculina salva.</p>";
+                }
+                if (countFem === 0) {
+                    listaFem.innerHTML = "<p style='color:#555; text-align:center; font-size:14px;'>Nenhuma roupa feminina salva.</p>";
+                }
             });
         }
 
         window.deletar = async (id) => {
-            if(!isUserAdmin) return;
-            if(confirm("Tem certeza?")) await deleteDoc(doc(db, "binds", id));
+            if(!currentUser) return;
+            if(confirm("Tem certeza que deseja excluir esta bind?")) {
+                try {
+                    await deleteDoc(doc(db, "binds", id));
+                } catch (e) {
+                    alert("Erro ao excluir: " + e.message);
+                }
+            }
         }
 
         // --- FUNÇÕES EDITOR ---
@@ -588,17 +641,28 @@
         }
 
         window.salvarEdicao = async () => {
-            if(!isUserAdmin) return;
+            if(!currentUser) return;
             const id = document.getElementById('editId').value;
-            const nome = document.getElementById('editNome').value;
-            const cmd = document.getElementById('editComando').value;
+            const nome = document.getElementById('editNome').value.trim();
+            const cmd = document.getElementById('editComando').value.trim();
             const cat = document.getElementById('editCategoria').value;
 
-            const dados = { nome: nome, comando: cmd, categoria: cat };
+            // Ao editar uma bind (inclusive uma antiga), já garante o vínculo com o usuário atual
+            const dados = { 
+                nome: nome, 
+                comando: cmd, 
+                categoria: cat,
+                uid: currentUser.uid,
+                userEmail: currentUser.email.toLowerCase()
+            };
             if(tempImgEdit) dados.foto = tempImgEdit;
 
-            try { await updateDoc(doc(db, "binds", id), dados); fecharModalEdit(); } 
-            catch(e) { alert("Erro: " + e.message); }
+            try { 
+                await updateDoc(doc(db, "binds", id), dados); 
+                fecharModalEdit(); 
+            } catch(e) { 
+                alert("Erro ao atualizar: " + e.message); 
+            }
         }
 
         window.copiarTexto = (t) => { navigator.clipboard.writeText(t).then(() => alert("Copiado!")); }
@@ -612,12 +676,11 @@
         }
         window.abrirConversor = () => { document.getElementById('inputLua').value = ""; document.getElementById('modalConvert').style.display = "flex"; }
         
-        // --- FUNÇÃO DO CONVERSOR ATUALIZADA ---
+        // --- FUNÇÃO DO CONVERSOR ---
         window.processarConversao = () => {
             const input = document.getElementById('inputLua').value;
             if(!input) return alert("Cole o código!");
 
-            // Novo Mapa de nomes baseado no input ['nome'] e comandos do servidor
             const mapNames = {
                 "mask": "mascara",       // ID 1
                 "arms": "maos",          // ID 3
@@ -632,8 +695,6 @@
                 "glass": "oculos"        // Prop 1
             };
 
-            // Regex para capturar ['chave'] = {item=X,texture=Y}
-            // Suporta espaços variados e aspas
             const regex = /\['(\w+)'\]\s*=\s*\{item\s*=\s*(-?\d+)\s*,\s*texture\s*=\s*(-?\d+)\}/g;
             
             let match, result = [];
@@ -643,8 +704,6 @@
                 let item = parseInt(match[2]);
                 let texture = parseInt(match[3]);
 
-                // Só adiciona se o item existir no mapa e o ID for válido (maior ou igual a 0)
-                // Itens com ID -1 geralmente significam "sem item", então ignoramos
                 if(mapNames[key] && item >= 0) {
                     result.push(`${mapNames[key]} ${item} ${texture}`);
                 }
